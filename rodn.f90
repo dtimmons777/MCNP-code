@@ -23,7 +23,7 @@ program rod
   real(R8), dimension (0:bins-1) ::xpos, xposnew, flux, xposmid 
   real(R8), dimension (0:7) :: fis_dist
   real(R8), dimension (0:((bins-1)/sites_bin)) :: shannon
-
+  real(R8)  ::   wtot, wcum, knt, prob
 !////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////   
    type neutron
        real(R8):: number_n
@@ -32,7 +32,7 @@ program rod
        real(R8):: move_n
    end type neutron
 
-type(neutron) fbank(0:n0*1.5), fbanknew(0:n0*1.5)
+type(neutron) fbank(0:n0*1.5), fbanknew(0:n0*1.5),keep(0:n0)
 
 !///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
  
@@ -135,9 +135,9 @@ do while (run<nrun)                                 !ensures the number of itera
                         fbanknew(i)%number_n=fbanknew(i)%number_n-1
                         do while(k>0)
                             j=0
-                        do while (fbanknew(j)%number_n>0)
-                            j=j+1
-                        end do   
+                            do while (fbanknew(j)%number_n>0)
+                                j=j+1
+                            end do   
                             fbanknew(j)%number_n=1
                             fbanknew(j)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n  
                             k=k-1
@@ -145,24 +145,62 @@ do while (run<nrun)                                 !ensures the number of itera
                         mult=mult+k             
                         
                 else                                  !scatter
-                        if (ii>0) then   
-                            fbanknew(ceiling(((move+locn)/binwidth)))=fbanknew(ceiling(((move+locn)/binwidth)))+1
-                            fbank(ceiling(((move+locn)/binwidth)))=fbank(ceiling(((move+locn)/binwidth)))+1  
-                        else if (ii<0) then   
-                            fbanknew(floor(((move+locn)/binwidth)))=fbanknew(floor(((move+locn)/binwidth)))+1
-                            fbank(floor(((move+locn)/binwidth)))=fbank(floor(((move+locn)/binwidth)))+1  
-                        else
-                            fbanknew(i)=fbanknew(i)+1
-                            fbank(i)=fbank(i)+1 
-                        end if 
-                    fbank(i)=fbank(i)-1
-                    fbanknew(i)=fbanknew(i)-1
-                    coll=coll+1 
+                        
+                    fbanknew(i)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n 
+                    fbank(i)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n 
+                    coll=coll+1
+ 
                 end if
+
 !--------------------------------------------------------------------------------------------------------------------------
+
             end if             !movement
         end if                 !particle present
       end do                   !sum(fbank)=0
+
+!-------------------------------------------------Calculated keff---------------------------------------------------------      
+
+       kpath=sum(fbanknew%number_n)/n
+       kpathrat=(kpath/kpathold-1.0)*(kpath/kpathold)**run
+       kpathold=kpath 
+
+!-------------------------------------------------Fission Bank Renormalization---------------------------------------------
+
+         wtot=sum(fbanknew%number_n)
+         wcum=0.0
+         k=0
+
+         do j=1, sum(fbanknew%number_n)
+             prob=fbanknew(j-1)%number_n*real(n0-k)/(wtot-wcum)
+             wcum=wcum +fbanknew(j-1)%number_n
+             knt=prob +rang()
+             do i=1,knt
+                 k=k+1;
+                 keep(k-1)=fbanknew(j)
+             end do
+         end do
+
+
+!------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
