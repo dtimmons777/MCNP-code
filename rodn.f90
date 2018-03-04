@@ -12,11 +12,11 @@ program rod
   real(R8), parameter :: length =3.87426d+0
   real(R8), parameter :: binwidth=length/(bins-1) 
   real(R8), parameter :: loc0 = 2d+0
-  real(R8), parameter :: nubar = 2.4367d+0
+  real(R8), parameter :: nubar = 2.414d+0
   real(R8), parameter :: error = .001
   integer, parameter :: source=100
   real(R8), parameter :: source_pos=2d+0
-  integer  :: i, absorb, leak,j,ii
+  integer  :: i, absorb, leak,j,ii, jj
   real(R8) :: total, locn, rn, direction, rx, den, Navg, wght, kinf, L2,D, kpath,kpathold, pos, xpos_ratio, kact
   integer :: bin0, n,run, particle, nleft, coll, inscat, mult,k
   real(R8) :: sigc, sigs,sigf, siga, sigt, move, omega, PI, Clength, keff, kpathrat, errork,nmax,nmin,nsig,navgn, pj, Hs, Hsold
@@ -26,12 +26,13 @@ program rod
 
 !////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////   
    type neutron
-       real(R8):: nposition
        real(R8):: number_n
-
+       real(R8):: nposition
+       real(R8):: angle_n
+       real(R8):: move_n
    end type neutron
 
-type(neutron) fbank(0:bins-1), fbanknew(0:bins-1)
+type(neutron) fbank(0:n0*1.5), fbanknew(0:n0*1.5)
 
 !///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
  
@@ -58,24 +59,24 @@ type(neutron) fbank(0:bins-1), fbanknew(0:bins-1)
     
 !////////////////////////////////////////////   Initializes components   /////////////////////////////////////////////////////  
 
-  bin0= loc0/binwidth
-  n=n0
-  locn= loc0
- do i=0,bins-1,i+1
-  fbank(i)%number_n= floor(real(n0/bins))
-  fbanknew(i)%number_n=fbank(i)%number_n
-  fbank(i)%nposition= 0
-  fbanknew(i)%nposition=fbank(i)%nposition
+    bin0= loc0/binwidth
+    n=n0
+    locn= loc0
+    do i=0,n0-1
+        fbank(i)%number_n= 1
+        fbanknew(i)%number_n=1
+        fbank(i)%nposition= 0
+        fbanknew(i)%nposition=fbank(i)%nposition
 
- end do
-  xposmid(0:bins-1)=0
-  run=0
+    end do
+    xposmid(0:bins-1)=0
+    run=0
 
 print *, "kact= ", kact, Clength
 
 !////////////////////////////////////////  The beginning of the successive runs   ///////////////////////////////////////////
 
-call RN_init_problem( 1234567_I8, 1 )
+    call RN_init_problem( 1234567_I8, 1 )
 
 do while (run<nrun)                                 !ensures the number of iterations occur
     xpos(0:bins-1)=0.0
@@ -87,63 +88,41 @@ do while (run<nrun)                                 !ensures the number of itera
     do while (abs(kpathrat)>error .or. xpos_ratio>error)                !ensures keff and flux is converged before the next run
       leak= 0; absorb=0
       mult=0; coll=0
-      i=maxval(maxloc(fbank))
+      i=0
       call RN_init_particle( int(i,I8) )
       do while(sum(fbank%number_n)>0)
-        if (i>bins-1) then                          !index remornalization
+        if (i>n0-1) then                          !index remornalization
             i=0
         end if
 
-        if (fbank(i)<1) then                        !No particle present
+        if (fbank(i)%number_n<1) then                        !No particle present
             i=i+1
         else                                        !particle exist and moves
-            locn=i*binwidth
-            move=-log(rang())/sigt;                 !how far the particle moves
+            fbank(i)%move_n=-log(rang())/sigt;                 !how far the particle moves
             omega=sign(1.0d+0,2.00*rang()-1.00) 
-            move=move*(2.0d+0*rang()-1d+0)                        !direction of movement
+            fbank(i)%angle_n=(2.0d+0*rang()-1d+0)                        !direction of movement
 
 !========================================= Leakage out left or right ========================================================
 
-            if (length<fbank(i)%nposition+move) then              ! right
+            if (length<fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n) then              ! right
                 leak=leak+1
                 fbank(i)%number_n=fbank(i)%number_n-1
                 fbanknew(i)%number_n=fbanknew(i)%number_n-1
-                xpos(i:bins-1)=xpos(i:bins-1)+binwidth
-            else if(fbank(i)%nposition+move<0) then               ! left
+                
+            else if(fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n<0) then               ! left
                 leak=leak+1
                 fbank(i)%number_n=fbank(i)%number_n-1
                 fbanknew(i)%number_n=fbanknew(i)%number_n-1
-                xpos(0:i)=xpos(0:i)+binwidth 
+                 
             else
-
-! ================================  track the particles movement for flux calculation  ========================================
- 
-                if (move>0) then
-                    xpos(i:floor((locn+move)/binwidth))=xpos(i:floor((locn+move)/binwidth))+binwidth
-                    ii=-1
-                    if (locn+move-int(locn+move)>rang()) then
-                    xpos(ceiling((locn+move)/binwidth))= xpos(ceiling((locn+move)/binwidth))+binwidth
-                    ii=1
-                    end if
-                else if (move==0) then
-                    xpos(i)=xpos(i)
-                    ii=0
-                else
-                    xpos(ceiling((locn+move)/binwidth):i)=xpos(ceiling((locn+move)/binwidth):i)+binwidth
-                    ii=1
-                    if (locn+move-int(locn+move)<rang()) then
-                    xpos(floor((locn+move)/binwidth))= xpos(floor((locn+move)/binwidth))+binwidth
-                    ii=-1
-                    end if
-                end if
 
 !---------------------------------------Determine the type of reaction-----------------------------------------------
 
                 rn=rang();
                 if (rn<sigc/sigt) then               !capture
                     absorb =absorb+1
-                    fbank(i)=fbank(i)-1
-                    fbanknew(i)=fbanknew(i)-1
+                    fbank(i)%number_n=fbank(i)%number_n-1
+                    fbanknew(i)%number_n=fbanknew(i)%number_n-1
 
                 else if (rn<(sigc+sigf)/sigt) then   !fission
                     rx=rang();
@@ -152,15 +131,17 @@ do while (run<nrun)                                 !ensures the number of itera
                     do while (rx>fis_dist(k))
                         k=k+1
                     end do
-                        fbank(i)=fbank(i)-1
-                        fbanknew(i)=fbanknew(i)-1
-                        if (ii>0) then   
-                            fbanknew(ceiling(((move+locn)/binwidth)))=fbanknew(ceiling(((move+locn)/binwidth)))+k  
-                        else if (ii<0) then   
-                            fbanknew(floor(((move+locn)/binwidth)))=fbanknew(floor(((move+locn)/binwidth)))+k  
-                        else
-                            fbanknew(i)=fbanknew(i)+k 
-                        end if 
+                        fbank(i)%number_n=fbank(i)%number_n-1
+                        fbanknew(i)%number_n=fbanknew(i)%number_n-1
+                        do while(k>0)
+                            j=0
+                        do while (fbanknew(j)%number_n>0)
+                            j=j+1
+                        end do   
+                            fbanknew(j)%number_n=1
+                            fbanknew(j)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n  
+                            k=k-1
+                        end do 
                         mult=mult+k             
                         
                 else                                  !scatter
