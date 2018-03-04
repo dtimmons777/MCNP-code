@@ -183,13 +183,13 @@ do while (run<nrun)                                 !ensures the number of itera
 
 !------------------------------------------------------------------------------------------------------------------------
 
-
-
-
-
-
-
-
+         k=0
+         do while(keep(k)%number_n>0) 
+             fbank(k)=keep(k)
+             fbanknew(k)=keep(k)
+             k=k+1
+         end do 
+         do while(fbanknew(k)number_n>0)
 
 
 
