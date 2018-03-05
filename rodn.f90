@@ -5,11 +5,13 @@ program rod
 
   integer, parameter :: I8 = selected_int_kind(18)
   integer, parameter :: R8 = selected_real_kind(15,307)
-  real(R8), parameter :: n0 = 10000d+0
+  integer, parameter :: n0 = 1000
   integer, parameter :: nrun = 200
+  integer, parameter :: nrun_throw = 50
+  integer, parameter :: run_act=nrun-nrun_throw
   integer, parameter :: sites_bin=10
+  real(R8), parameter :: length =4.0d+0
   integer, parameter :: bins= 101
-  real(R8), parameter :: length =3.87426d+0
   real(R8), parameter :: binwidth=length/(bins-1) 
   real(R8), parameter :: loc0 = 2d+0
   real(R8), parameter :: nubar = 2.414d+0
@@ -32,7 +34,7 @@ program rod
        real(R8):: move_n
    end type neutron
 
-type(neutron) fbank(0:n0*1.5), fbanknew(0:n0*1.5),keep(0:n0)
+type(neutron) fbank(0:int(n0*1.5)), fbanknew(0:int(n0*1.5)),keep(0:int(n0))
 
 !///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
  
@@ -51,7 +53,7 @@ type(neutron) fbank(0:n0*1.5), fbanknew(0:n0*1.5),keep(0:n0)
 !-----------------------------------------------------Actual keff-------------------------------------------------------
 !Assumes a bare slab
     kinf=nubar*sigf/siga
-    D=1.0d+0/(sigs*3.00*(1.0d+0-2.00/(3.00*nint(wght))))
+    D=1.0d+0/(sigt*3.00)!*(1.0d+0-2.00/(3.00*nint(wght))))
     L2=D/siga
     PI=4.D0*DATAN(1.D0)
     Clength=PI*(L2/(kinf-1d+0))**0.5d+0-2.0d+0*2.1312d+0*D
@@ -85,7 +87,7 @@ do while (run<nrun)                                 !ensures the number of itera
     kpathold = 200d+0
     Hsold=10.0
 	
-    do while (abs(kpathrat)>error .or. xpos_ratio>error)                !ensures keff and flux is converged before the next run
+    do while (abs(kpathrat)>error )!.or. xpos_ratio>error)                !ensures keff and flux is converged before the next run
       leak= 0; absorb=0
       mult=0; coll=0
       i=0
@@ -131,10 +133,9 @@ do while (run<nrun)                                 !ensures the number of itera
                     do while (rx>fis_dist(k))
                         k=k+1
                     end do
-                        fbank(i)%number_n=fbank(i)%number_n-1
-                        fbanknew(i)%number_n=fbanknew(i)%number_n-1
+
                         do while(k>0)
-                            j=0
+                            j=n0-1
                             do while (fbanknew(j)%number_n>0)
                                 j=j+1
                             end do   
@@ -142,6 +143,8 @@ do while (run<nrun)                                 !ensures the number of itera
                             fbanknew(j)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n  
                             k=k-1
                         end do 
+                        fbank(i)%number_n=fbank(i)%number_n-1
+                        fbanknew(i)%number_n=fbanknew(i)%number_n-1
                         mult=mult+k             
                         
                 else                                  !scatter
@@ -168,31 +171,57 @@ do while (run<nrun)                                 !ensures the number of itera
 
          wtot=sum(fbanknew%number_n)
          wcum=0.0
-         k=0
-
-         do j=1, sum(fbanknew%number_n)
-             prob=fbanknew(j-1)%number_n*real(n0-k)/(wtot-wcum)
-             wcum=wcum +fbanknew(j-1)%number_n
+         k=-1
+print *, sum(fbanknew%number_n)
+         do j=0, int(sum(fbanknew%number_n))-1
+             prob=fbanknew(j)%number_n*real(n0-k)/(wtot-wcum)
+             wcum=wcum +fbanknew(j)%number_n
              knt=prob +rang()
-             do i=1,knt
+             do i=1,int(knt)
                  k=k+1;
-                 keep(k-1)=fbanknew(j)
+                 keep(k)=fbanknew(j)
+print *, keep(k)%number_n
              end do
          end do
 
 
 !------------------------------------------------------------------------------------------------------------------------
-
+         k=0
+         do while (sum(fbanknew%number_n)>0)
+             fbank(k)%number_n=0.0;fbank(k)%nposition=0.0;fbank(k)%angle_n=0.0;fbank(k)%move_n=0.0;
+             fbanknew(k)%number_n=0.0;fbanknew(k)%nposition=0.0;fbanknew(k)%angle_n=0.0;fbanknew(k)%move_n=0.0;
+             k=k+1
+         end do
          k=0
          do while(keep(k)%number_n>0) 
              fbank(k)=keep(k)
              fbanknew(k)=keep(k)
              k=k+1
          end do 
-         do while(fbanknew(k)number_n>0)
+!print*, sum(keep%number_n)         
 
 
+    end do    !keff
+!print *, run
 
+
+    if (run>=nrun_throw) then
+     ! xposnew(0:bins-1)=(xpos(0:bins-1)/maxval(xpos)+xposnew(0:bins-1)*(run+1.00-nrun_throw))/(run+2.00-nrun_throw)
+      keff=(keff*(run+1.00-nrun_throw)+kpath)/(run+2.00-nrun_throw)
+      !nmax(run-nrun_throw)= kpath
+      
+    else
+     ! xposnew(0:bins-1)=xpos(0:bins-1)/maxval(xpos)
+      keff=kpath
+    end if
+
+
+    run= run+1
+
+
+    end do    !runs
+
+print *, keff
 
 
 
