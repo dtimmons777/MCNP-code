@@ -7,10 +7,10 @@ program rod
   integer, parameter :: R8 = selected_real_kind(15,307)
   integer, parameter :: n0 = 1000
   integer, parameter :: nrun = 100
-  integer, parameter :: nrun_throw = 50
+  integer, parameter :: nrun_throw = 20
   integer, parameter :: run_act=nrun-nrun_throw
   integer, parameter :: sites_bin=10
-  real(R8), parameter :: length =4.0d+0
+  real(R8), parameter :: length =5.0d+0
   integer, parameter :: bins= 101
   real(R8), parameter :: binwidth=length/(bins-1) 
   real(R8), parameter :: loc0 = 2d+0
@@ -69,13 +69,16 @@ type(neutron) fbank(1:int(n0*1.5)), fbanknew(1:int(n0*1.5)),keep(1:int(n0*1.5))
         fbanknew(i)%number_n=0.0
         fbank(i)%nposition= 0.0
         fbanknew(i)%nposition=fbank(i)%nposition
+        fbank(i)%angle_n=0
+        fbanknew(i)%angle_n=fbank(i)%angle_n
+
 
     end do
     do i=1,int(n0)
         fbank(i)%number_n= 1.0
         fbanknew(i)%number_n=1.0
     end do
-    xposmid(1:bins)=0
+    
     run=0
     write(*,'(/)')
 
@@ -102,12 +105,22 @@ do while (run<nrun)                                 !ensures the number of itera
         if (i>n) i=1;                   !index remornalization
             
         
-        if (fbank(i)%number_n<1) then                        !No particle present
-            i=i+1!;print *, sum(fbank%number_n),i
+        if (fbank(i)%number_n<1.00) then                        !No particle present
+            i=i+1
         else                                        !particle exist and moves
             fbank(i)%move_n=-log(rang())/sigt;                 !how far the particle moves
-            omega=sign(1.0d+0,2.00*rang()-1.00) 
-            fbank(i)%angle_n=(2.0d+0*rang()-1d+0)                        !direction of movement
+            if (abs(fbank(i)%angle_n)==0.0) then
+                omega=sign(1.0d+0,2.00*rang()-1.00) 
+                fbank(i)%angle_n=(2.0d+0*rang()-1.0d+0)                        !direction of movement
+            end if
+
+
+!==========================================   Movement   ===================================================================
+
+
+
+
+
 
 !========================================= Leakage out left or right ========================================================
 
@@ -115,11 +128,13 @@ do while (run<nrun)                                 !ensures the number of itera
                 leak=leak+1
                 fbank(i)%number_n=fbank(i)%number_n-1.0
                 fbanknew(i)%number_n=fbanknew(i)%number_n-1.0
+                fbanknew(i)%angle_n=0.0
                 
             else if(fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n<0) then               ! left
                 leak=leak+1
                 fbank(i)%number_n=fbank(i)%number_n-1.0
                 fbanknew(i)%number_n=fbanknew(i)%number_n-1.0
+                fbanknew(i)%angle_n=0.0
                  
             else
 
@@ -130,6 +145,7 @@ do while (run<nrun)                                 !ensures the number of itera
                     absorb =absorb+1
                     fbank(i)%number_n=fbank(i)%number_n-1.0
                     fbanknew(i)%number_n=fbanknew(i)%number_n-1.0
+                     fbanknew(i)%angle_n=0.0
 
                 else if (rn<(sigc+sigf)/sigt) then   !fission
                     rx=rang();
@@ -138,26 +154,30 @@ do while (run<nrun)                                 !ensures the number of itera
                     do while (rx>fis_dist(k))
                         k=k+1
                     end do
-
-                        do while(k>0)
-                            j=1
-                            do while (fbanknew(j)%number_n>0)
-                                j=j+1
-                            end do   
-                            fbanknew(j)%number_n=1.0
-                            fbanknew(j)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n  
-                            k=k-1
-                        end do 
-                        fbank(i)%number_n=fbank(i)%number_n-1.0
-                        fbanknew(i)%number_n=fbanknew(i)%number_n-1.0
-                        mult=mult+k             
+                    mult=mult+k  
+                    do while(k>1)
+                        j=1
+                        do while (fbanknew(j)%number_n>0.0)
+                            j=j+1
+                        end do   
+                        fbanknew(j)%number_n=1.0
+                        fbanknew(j)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n
+                        fbanknew(j)%angle_n=(2.0d+0*rang()-1.0d+0)
+                        k=k-1
+                    end do 
+                    fbank(i)%number_n=fbank(i)%number_n-1.0
+                    fbanknew(i)%number_n=fbanknew(i)%number_n-1.0
+                    fbanknew(i)%angle_n=0.0
+                                                   
                         
                 else                                  !scatter
                         
                     fbanknew(i)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n 
                     fbank(i)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n 
+                    fbanknew(i)%angle_n=(2.0d+0*rang()-1.0d+0)
+                    fbank(i)%angle_n=(2.0d+0*rang()-1.0d+0)
                     coll=coll+1
- 
+                    
                 end if
 
 !--------------------------------------------------------------------------------------------------------------------------
@@ -177,9 +197,9 @@ do while (run<nrun)                                 !ensures the number of itera
          wtot=sum(fbanknew%number_n)
          wcum=0.0
          k=0
-print *, wtot
-         do j=1,int(sum(fbanknew%number_n))
-             prob=fbanknew(j)%number_n*real(n0-k)/(wtot-wcum)
+!print *, wtot
+         do j=1,int(n0*1.5)
+             prob=fbanknew(j)%number_n*real(n-k)/(wtot-wcum)
              wcum=wcum + fbanknew(j)%number_n
              knt =prob + rang()
              do i=1,int(knt)
@@ -195,13 +215,13 @@ print *, wtot
 
 !------------------------------------------------------------------------------------------------------------------------
          k=1
-         do while (sum(fbanknew%number_n)>=1 .or. sum(fbank%number_n)>=1)
+         do while (k<int(n0*1.5))
              fbank(k)%number_n=0.0;fbank(k)%nposition=0.0;fbank(k)%angle_n=0.0;fbank(k)%move_n=0.0;
              fbanknew(k)%number_n=0.0;fbanknew(k)%nposition=0.0;fbanknew(k)%angle_n=0.0;fbanknew(k)%move_n=0.0;
              k=k+1
 
          end do
-         k=1;
+         k=1
          do while(sum(keep%number_n)>0) 
              j=1
              do while (keep(j)%number_n<1)
@@ -212,14 +232,10 @@ print *, wtot
              k=k+1
              keep(j)%number_n=0.0
          end do 
-print *, n, sum(fbanknew%number_n)
 
-         k=1
-         do while (sum(keep%number_n)>=1)
-             keep(k)%number_n=0.0;k=k+1
-         end do
-    end do    !keff
+!print *, 1.00+real(mult-absorb-leak)/n, n
 
+    end do          !Keff
 
 
     if (run>=nrun_throw) then
