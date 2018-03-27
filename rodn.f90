@@ -5,7 +5,7 @@ program rod
 
   integer, parameter :: I8 = selected_int_kind(18)
   integer, parameter :: R8 = selected_real_kind(15,307)
-  integer, parameter :: n0 = 10000
+  integer, parameter :: n0 = 1000
   integer, parameter :: source_n=0
   integer, parameter :: n_max = (n0*1.4+source_n)
   integer, parameter :: nrun = 100
@@ -20,11 +20,11 @@ program rod
   real(R8), parameter :: error = 0.001
   real(R8), parameter :: source_pos=0d+0
   real(R8), parameter :: bias=0.0
-  integer  :: i, absorb, leak,j,ii, jj,knt
-  real(R8) :: total, locn, rn, direction, rx, den, Navg, wght, kinf, L2,D, kpath,kpathold, xpos_ratio, kact
-  integer :: n, run, particle, nleft, coll, inscat, mult,k,source
-  real(R8) :: sigc, sigs,sigf, siga, sigt, move, omega, PI, Clength, keff, kpathrat, errork,nmin,nsig,navgn, pj, Hs, Hsold
-  real(R8), dimension (1:bins) ::xpos, xposnew, xposmid 
+  integer  :: i, absorb, leak, j, knt
+  real(R8) :: locn, rn, rx, den, Navg, wght, kinf, L2,D, kpath,kpathold, xpos_ratio, kact
+  integer :: n, run, coll, mult, k, source
+  real(R8) :: sigc, sigs,sigf, siga, sigt, omega, PI, Clength, keff, kpathrat, nsig, navgn, pj, Hs, Hsold
+  real(R8), dimension (1:bins) ::xpos, xposnew
   real(R8), dimension (1:bins) :: flux
   real(R8), dimension (1:8) :: fis_dist
   real(R8), dimension (1:((bins)/sites_bin)) :: shannon
@@ -32,7 +32,7 @@ program rod
   real(R8), dimension (1:nrun-nrun_throw) :: nmax
 
 !////////////////////////////////////////////////////////////////////////////////////   
-
+  
    type neutron
        real(R8):: number_n
        real(R8):: nposition
@@ -98,7 +98,7 @@ do while (run<=nrun)                                 !ensures the number of iter
     kpathold = 200d+0
     Hsold=10.0
     call cpu_time(start)
-	
+    
     do while (dabs(kpathrat)>error .or. xpos_ratio>error)  !ensures keff and flux is converged before the next run
       leak= 0; absorb=0;
       mult=0; coll=0;distance=0.0;
@@ -125,7 +125,7 @@ do while (run<=nrun)                                 !ensures the number of iter
 
             locn=(fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n)/binwidth+1.0
             poss=(fbank(i)%nposition/binwidth)+1.0
-            			
+                        
 !==================== Leakage out left or right ======================================
 
             if (length<(locn-1.0)*binwidth) then              ! right
@@ -134,7 +134,7 @@ do while (run<=nrun)                                 !ensures the number of iter
                 fbanknew(i)%number_n=fbanknew(i)%number_n-1.0
                 fbanknew(i)%angle_n=2.0
                 fbank(i)%angle_n=2.0
-		xpos(ceiling(poss):bins)=xpos(ceiling(poss):bins)+binwidth
+                xpos(ceiling(poss):bins)=xpos(ceiling(poss):bins)+binwidth
                 xpos(floor(poss))=xpos(floor(poss))+binwidth*(ceiling(poss)-poss)
                 
             else if((locn-1.0)*binwidth<0.0) then               ! left
@@ -142,32 +142,32 @@ do while (run<=nrun)                                 !ensures the number of iter
                 fbank(i)%number_n=fbank(i)%number_n-1.0
                 fbanknew(i)%number_n=fbanknew(i)%number_n-1.0
                 fbanknew(i)%angle_n=2.0
-		fbank(i)%angle_n=2.0
-		xpos(1:floor(poss))=xpos(1:floor(poss))+binwidth
+                fbank(i)%angle_n=2.0
+                xpos(1:floor(poss))=xpos(1:floor(poss))+binwidth
                 xpos(ceiling(poss))=xpos(ceiling(poss))+binwidth*(poss-floor(poss)) 
             else
 
 !-------------------------- Flux math -----------------------------
 
                 if (fbank(i)%angle_n>0.0) then
-		    xpos(ceiling(poss):floor(locn))=xpos(ceiling(poss):floor(locn))+binwidth
-		    xpos(ceiling(locn))=xpos(ceiling(locn))+binwidth*(locn-floor(locn))
+                    xpos(ceiling(poss):floor(locn))=xpos(ceiling(poss):floor(locn))+binwidth
+                    xpos(ceiling(locn))=xpos(ceiling(locn))+binwidth*(locn-floor(locn))
                     xpos(floor(poss))=xpos(floor(poss))+binwidth*(ceiling(poss)-poss)
-		else
-		    xpos(ceiling(locn):floor(poss))=xpos(ceiling(locn):floor(poss))+binwidth
-		    xpos(floor(locn))=xpos(floor(locn))+binwidth*(ceiling(locn)-locn)
+                else
+                    xpos(ceiling(locn):floor(poss))=xpos(ceiling(locn):floor(poss))+binwidth
+                    xpos(floor(locn))=xpos(floor(locn))+binwidth*(ceiling(locn)-locn)
                     xpos(ceiling(poss))=xpos(ceiling(poss))+binwidth*(poss-floor(poss)) 
-		end if
-			
+                end if
+            
 !----------------------Determine the type of reaction-------------------------------
-			
+            
                 rn=rang();
                 if (rn<sigc/sigt) then               !capture
                     absorb =absorb+1
                     fbank(i)%number_n=fbank(i)%number_n-1.0
                     fbanknew(i)%number_n=fbanknew(i)%number_n-1.0
                     fbanknew(i)%angle_n=2.0
-		    fbank(i)%angle_n=2.0
+                    fbank(i)%angle_n=2.0
 
                 else if (rn<(sigc+sigf)/sigt) then   !fission
                     rx=rang();
@@ -250,7 +250,7 @@ do while (run<=nrun)                                 !ensures the number of iter
                  j=j+1
              end do
              fbank(k)=keep(j)
-	     fbanknew(k)=fbank(k)
+         fbanknew(k)=fbank(k)
              k=k+1
              keep(j)%number_n=0.0
          end do
@@ -266,16 +266,16 @@ do while (run<=nrun)                                 !ensures the number of iter
          
 !-----------------------------Shannon Entropy------------------------------------------
 
-	do i=1,int(bins/sites_bin)
-	  pj=0
-	  do j=int(1+sites_bin*(i-1)),int(1+sites_bin*i)
-	    pj=pj+ xpos(j)
-	  end do
-	  shannon(i)=pj/sum(xpos)*log(pj/sum(xpos))/log(2.0)
-	end do
-	Hs=-sum(shannon)
-	xpos_ratio=dabs(Hs/Hsold-1.0)
-	Hsold=Hs
+    do i=1,int(bins/sites_bin)
+      pj=0
+      do j=int(1+sites_bin*(i-1)),int(1+sites_bin*i)
+        pj=pj+ xpos(j)
+      end do
+      shannon(i)=pj/sum(xpos)*log(pj/sum(xpos))/log(2.0)
+    end do
+    Hs=-sum(shannon)
+    xpos_ratio=dabs(Hs/Hsold-1.0)
+    Hsold=Hs
 !print *, dabs(kpathrat), dabs(kpath), run!1.00+real(mult-absorb-leak)/n, n
 
 !----------------------------- Add source----------------------------------------------
@@ -288,7 +288,7 @@ do while (run<=nrun)                                 !ensures the number of iter
            fbanknew(n+k)%nposition=source_pos
            fbanknew(n+k)%nposition=source_pos
            k=k+1
-           source=source-1.0
+           source=source-1
         end do
 
 !-------------------------------------------------------------------------------------
