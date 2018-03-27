@@ -5,29 +5,32 @@ program rod
 
   integer, parameter :: I8 = selected_int_kind(18)
   integer, parameter :: R8 = selected_real_kind(15,307)
-  integer, parameter :: n0 = 1000
+  integer, parameter :: n0 = 10000
   integer, parameter :: source_n=0
-  integer, parameter :: n_max = n0*1.5+source_n
-  integer, parameter :: nrun = 150
-  integer, parameter :: nrun_throw = 75
+  integer, parameter :: n_max = (n0*1.4+source_n)
+  integer, parameter :: nrun = 100
+  integer, parameter :: nrun_throw = 50
   integer, parameter :: run_act=nrun-nrun_throw
-  integer, parameter :: sites_bin=5
+  integer, parameter :: sites_bin=25
   real(R8), parameter :: length =4.0d+0
   integer, parameter :: bins= 101
-  real(R8), parameter :: binwidth=length/(bins-1) 
-  real(R8), parameter :: loc0 = 2d+0
+  real(R8), parameter :: binwidth=length/(bins) 
+  real(R8), parameter :: loc0 = length/2.0d+0
   real(R8), parameter :: nubar = 2.414d+0
-  real(R8), parameter :: error = .001
+  real(R8), parameter :: error = 0.001
   real(R8), parameter :: source_pos=0d+0
   real(R8), parameter :: bias=0.0
   integer  :: i, absorb, leak,j,ii, jj,knt
   real(R8) :: total, locn, rn, direction, rx, den, Navg, wght, kinf, L2,D, kpath,kpathold, xpos_ratio, kact
   integer :: n, run, particle, nleft, coll, inscat, mult,k,source
-  real(R8) :: sigc, sigs,sigf, siga, sigt, move, omega, PI, Clength, keff, kpathrat, errork,nmax,nmin,nsig,navgn, pj, Hs, Hsold
-  real(R8), dimension (1:bins) ::xpos, xposnew, flux, xposmid 
+  real(R8) :: sigc, sigs,sigf, siga, sigt, move, omega, PI, Clength, keff, kpathrat, errork,nmin,nsig,navgn, pj, Hs, Hsold
+  real(R8), dimension (1:bins) ::xpos, xposnew, xposmid 
+  real(R8), dimension (1:bins) :: flux
   real(R8), dimension (1:8) :: fis_dist
   real(R8), dimension (1:((bins)/sites_bin)) :: shannon
-  real(R8)  ::   wtot, wcum, prob, posf, poss
+  real(R8)  ::   wtot, wcum, prob, posf, poss, start, finish, distance
+  real(R8), dimension (1:nrun-nrun_throw) :: nmax
+
 !////////////////////////////////////////////////////////////////////////////////////   
 
    type neutron
@@ -70,7 +73,7 @@ type(neutron) fbank(1:int(n_max)), fbanknew(1:int(n_max)),keep(1:int(n_max))
     do i=1,int(n_max)
         fbank(i)%number_n= 0.0
         fbanknew(i)%number_n=0.0
-        fbank(i)%nposition=length/2.0
+        fbank(i)%nposition=loc0
         fbanknew(i)%nposition=fbank(i)%nposition
         fbank(i)%angle_n=2.0
         fbanknew(i)%angle_n=fbank(i)%angle_n
@@ -89,32 +92,34 @@ type(neutron) fbank(1:int(n_max)), fbanknew(1:int(n_max)),keep(1:int(n_max))
 
     call RN_init_problem( 1234567_I8, 1 )
 
-do while (run<nrun)                                 !ensures the number of iterations occur
+do while (run<=nrun)                                 !ensures the number of iterations occur
     xpos_ratio=20.0d+0
     kpathrat=10.5d+0
     kpathold = 200d+0
     Hsold=10.0
+    call cpu_time(start)
 	
-    do while (abs(kpathrat)>error .or. xpos_ratio>error)                !ensures keff and flux is converged before the next run
-      leak= 0; absorb=0
-      mult=0; coll=0
+    do while (dabs(kpathrat)>error .or. xpos_ratio>error)  !ensures keff and flux is converged before the next run
+      leak= 0; absorb=0;
+      mult=0; coll=0;distance=0.0;
       i=1
       xpos(1:bins)=0.0;
       source=source_n
       call RN_init_particle( int(i,I8) )
 
-      do while(sum(fbank%number_n)>=1)
-        if (i>n_max) i=1;                   !index remornalization
+      do while(sum(fbank%number_n)>=1.0)
+        if (i>n_max) i=1;                               !index remornalization
                     
-        if (fbank(i)%number_n<1.00) then                        !No particle present
+        if (fbank(i)%number_n<1.00) then                !No particle present
             i=i+1
-        else                                        !particle exist and moves
-            fbank(i)%move_n=-log(rang())/sigt;                 !how far the particle moves
+        else                                            !particle exist and moves
+            fbank(i)%move_n=-log(rang())/sigt;          !how far the particle moves
             if ((fbank(i)%angle_n)==2.0) then
-                omega=sign(1.0d+0,2.00*rang()-1.00) 
-                fbank(i)%angle_n=(2.0d+0*rang()-1.0d+0)                        !direction of movement
+                omega=(2.00*rang()-1.00)
+                fbank(i)%angle_n=omega                  !direction of movement
+!                
             end if
-
+            distance=distance+(fbank(i)%move_n)
 
 !=========================   Movement   ===========================================
 
@@ -142,9 +147,9 @@ do while (run<nrun)                                 !ensures the number of itera
                 xpos(ceiling(poss))=xpos(ceiling(poss))+binwidth*(poss-floor(poss)) 
             else
 
-!------------------------ movement ---------------------------
+!-------------------------- Flux math -----------------------------
 
-                if (fbank(i)%angle_n>0) then
+                if (fbank(i)%angle_n>0.0) then
 		    xpos(ceiling(poss):floor(locn))=xpos(ceiling(poss):floor(locn))+binwidth
 		    xpos(ceiling(locn))=xpos(ceiling(locn))+binwidth*(locn-floor(locn))
                     xpos(floor(poss))=xpos(floor(poss))+binwidth*(ceiling(poss)-poss)
@@ -167,20 +172,19 @@ do while (run<nrun)                                 !ensures the number of itera
                 else if (rn<(sigc+sigf)/sigt) then   !fission
                     rx=rang();
                     absorb=absorb+1;
-                    k=0
+                    k=1
                     do while (rx>fis_dist(k))
                         k=k+1
                     end do
                     mult=mult+k  
-                    do while(k>1)
+                    do while(k>1.0)
                         j=1
                         do while (fbanknew(j)%number_n>0.0)
                             j=j+1
                         end do   
                         fbanknew(j)%number_n=1.0
                         fbanknew(j)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n
-                        fbanknew(j)%angle_n=(2.0d+0*rang()-1.0d+0+bias)
-                        if (dabs(fbanknew(j)%angle_n)>1.0) fbanknew(j)%angle_n=sign(1.0d+0,fbanknew(j)%angle_n)
+                        
                         k=k-1
                     end do 
                     fbank(i)%number_n=fbank(i)%number_n-1.0
@@ -191,7 +195,7 @@ do while (run<nrun)                                 !ensures the number of itera
                 else                                  !scatter
                         
                     fbanknew(i)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n 
-                    fbank(i)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n 
+                    fbank(i)%nposition=fbanknew(i)%nposition 
                     fbanknew(i)%angle_n=(2.0d+0*rang()-1.0d+0)
                     fbank(i)%angle_n=fbanknew(i)%angle_n
                     coll=coll+1
@@ -206,11 +210,11 @@ do while (run<nrun)                                 !ensures the number of itera
 
 !-------------------------------Calculated keff----------------------------------------
 
-       kpath=sum(fbanknew%number_n)/n
-       kpathrat=(kpath/kpathold-1.0)*(kpath/kpathold)**run
+       kpath=(nubar*sigf/sigt*(coll+absorb)/n+kinf*absorb/n)/2.0d+0!nubar*sigf*2.0*sum(xpos)/n
+       kpathrat=(kpath/kpathold-1.0d+0)!*(kpath/kpathold)**run
        kpathold=kpath 
-
-!-------------------Fission Bank Renormalization----------------------------------------
+       
+!--------------------------Fission Bank Renormalization----------------------------------
 
          wtot=sum(fbanknew%number_n)
          wcum=0.0
@@ -230,16 +234,15 @@ do while (run<nrun)                                 !ensures the number of itera
          n=sum(keep%number_n)
 
 
-
-!----------------------------------------------------------------------------------------
+!------------------------ Renormalizing the fission bank ------------------------------
 
          k=1
          do while (k<int(n_max))
              fbank(k)%number_n=0.0;fbank(k)%nposition=0.0;fbank(k)%angle_n=0.0;fbank(k)%move_n=0.0;
              fbanknew(k)%number_n=0.0;fbanknew(k)%nposition=0.0;fbanknew(k)%angle_n=0.0;fbanknew(k)%move_n=0.0;
              k=k+1
-
          end do
+
          k=1
          do while(sum(keep%number_n)>0) 
              j=1
@@ -251,6 +254,30 @@ do while (run<nrun)                                 !ensures the number of itera
              k=k+1
              keep(j)%number_n=0.0
          end do
+
+         k=1 
+         do while(k<n)
+             if (fbank(k)%nposition==fbank(k+1)%nposition .and. fbank(k)%angle_n==fbank(k+1)%angle_n) then
+                fbank(k)%angle_n=2.0
+                fbanknew(k)%angle_n=2.0
+             end if
+             k=k+1
+         end do 
+         
+!-----------------------------Shannon Entropy------------------------------------------
+
+	do i=1,int(bins/sites_bin)
+	  pj=0
+	  do j=int(1+sites_bin*(i-1)),int(1+sites_bin*i)
+	    pj=pj+ xpos(j)
+	  end do
+	  shannon(i)=pj/sum(xpos)*log(pj/sum(xpos))/log(2.0)
+	end do
+	Hs=-sum(shannon)
+	xpos_ratio=dabs(Hs/Hsold-1.0)
+	Hsold=Hs
+!print *, dabs(kpathrat), dabs(kpath), run!1.00+real(mult-absorb-leak)/n, n
+
 !----------------------------- Add source----------------------------------------------
         k=1
         do while (source>0.0)
@@ -263,19 +290,6 @@ do while (run<nrun)                                 !ensures the number of itera
            k=k+1
            source=source-1.0
         end do
-!-----------------------------Shannon Entropy------------------------------------------
-
-	do i=1,int(bins)/sites_bin,1
-	  pj=0
-	  do j=int(1+sites_bin*(i-1)),int(1+sites_bin+sites_bin*(i-1))
-	    pj=pj+ xpos(j)
-	  end do
-	  shannon(i)=pj/sum(xpos)*log(pj/sum(xpos))/log(2.0)
-	end do
-	Hs=-sum(shannon)
-	xpos_ratio=dabs(Hs/Hsold-1.0)
-	Hsold=Hs
-!print *, xpos_ratio!1.00+real(mult-absorb-leak)/n, n
 
 !-------------------------------------------------------------------------------------
     end do          !Keff
@@ -284,7 +298,7 @@ do while (run<nrun)                                 !ensures the number of itera
     if (run>nrun_throw) then
       xposnew(1:bins)=(xpos(1:bins)/maxval(xpos)+xposnew(1:bins)*(run-nrun_throw))/(run+1.00-nrun_throw)
       keff=(keff*(run-nrun_throw)+kpath)/(run+1.00-nrun_throw)
-      !nmax(run-nrun_throw)= kpath
+      nmax(run-nrun_throw)= kpath
       
     else
       xposnew(1:bins)=xpos(1:bins)/maxval(xpos)
@@ -295,9 +309,17 @@ if (run-nrun_throw==0) print *,  "------------------Start Count-----------------
 if (mod(run,int(nrun/5))==0) write(*,'(10x,A,I3,5x,A,F6.4)') 'run ',run,'keff=', keff
 
     run= run+1
-
+    call cpu_time(finish)
+!print *, finish-start
+!print *,  'Time =',finish-start
 
     end do    !runs
+
+!---------------------------------------------  d error  ----------------------------------------------------------
+   navgn=sum(nmax)/(run-nrun_throw)
+   nsig=(1.00/(run-nrun_throw-1.00)*1/(run-nrun_throw)*sum((nmax(1:nrun-nrun_throw)**2.00-navgn**2.00)))
+   nsig=sqrt(abs(nsig))
+
 
 !-----------------------------------flux calc---------------------------------------
 
@@ -305,8 +327,8 @@ i=1
 flux(1:bins)=0
 posf=0
 do while(i<=bins)
-    flux(i)=dsin(PI*(posf+2.1312*D)/(length+2*2.1312*D))
-	posf=posf+binwidth
+    flux(i)=(dsin(PI*(posf+2.1312*D)/(length+2*2.1312*D))+dsin(PI*(binwidth+posf+2.1312*D)/(length+2*2.1312*D)))/2.0
+    posf=posf+binwidth
     i=i+1
 end do
 
@@ -314,7 +336,8 @@ end do
 !---------------------------------Print stuff--------------------------------------
 
 print *, "kact= ", kact
-print *, "keff= ", keff, "dkeff[$]=", abs(keff-kact)/.0065
+print *, "keff= ", keff, "sig",nsig
+print *, "dkeff[$]=", abs(keff-kact)/.0065
  print *, maxloc(xposnew), maxloc(flux) 
 write(*,'(/)')
 
