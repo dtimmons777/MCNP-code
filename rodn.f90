@@ -17,7 +17,7 @@ program rod
   real(R8), parameter :: binwidth=length/(bins) 
   real(R8), parameter :: loc0 = length/2.0d+0
   real(R8), parameter :: nubar = 2.414d+0
-  real(R8), parameter :: error = 0.001
+  real(R8), parameter :: error = 1.0/n0*1.0
   real(R8), parameter :: source_pos=0d+0
   real(R8), parameter :: bias=0.0
   integer  :: i, absorb, leak, j, knt
@@ -61,7 +61,7 @@ type(neutron) fbank(1:int(n_max)), fbanknew(1:int(n_max)),keep(1:int(n_max))
 
     !Assumes a bare slab
     kinf=nubar*sigf/siga
-    D=1.0d+0/(sigt*3.00)!*(1.0d+0-2.00/(3.00*nint(wght))))
+    D=1.0d+0/(3.00*sigt)!*(1.0d+0-2.00/(3.00*int(wght))))
     L2=D/siga
     PI=4.D0*DATAN(1.D0)
     Clength=PI*(L2/(kinf-1d+0))**0.5d+0-2.0d+0*2.1312d+0*D
@@ -120,7 +120,6 @@ do while (run<=nrun)                                 !ensures the number of iter
 !                
             end if
             distance=distance+(fbank(i)%move_n)
-
 !=========================   Movement   ===========================================
 
             locn=(fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n)/binwidth+1.0
@@ -136,6 +135,7 @@ do while (run<=nrun)                                 !ensures the number of iter
                 fbank(i)%angle_n=2.0
                 xpos(ceiling(poss):bins)=xpos(ceiling(poss):bins)+binwidth
                 xpos(floor(poss))=xpos(floor(poss))+binwidth*(ceiling(poss)-poss)
+                distance=distance+length-(locn-1.0)*binwidth
                 
             else if((locn-1.0)*binwidth<0.0) then               ! left
                 leak=leak+1
@@ -144,7 +144,8 @@ do while (run<=nrun)                                 !ensures the number of iter
                 fbanknew(i)%angle_n=2.0
                 fbank(i)%angle_n=2.0
                 xpos(1:floor(poss))=xpos(1:floor(poss))+binwidth
-                xpos(ceiling(poss))=xpos(ceiling(poss))+binwidth*(poss-floor(poss)) 
+                xpos(ceiling(poss))=xpos(ceiling(poss))+binwidth*(poss-floor(poss))
+                distance=distance-(locn-1.0)*binwidth+(poss-1.0)*binwidth 
             else
 
 !-------------------------- Flux math -----------------------------
@@ -184,7 +185,9 @@ do while (run<=nrun)                                 !ensures the number of iter
                         end do   
                         fbanknew(j)%number_n=1.0
                         fbanknew(j)%nposition=fbank(i)%nposition+fbank(i)%move_n*fbank(i)%angle_n
-                        
+                        omega=(2.00*rang()-1.00+bias)
+                        if(dabs(omega)>1.0) omega=sign(1.0d+0,omega)
+                        fbanknew(j)%angle_n=omega  
                         k=k-1
                     end do 
                     fbank(i)%number_n=fbank(i)%number_n-1.0
@@ -210,10 +213,11 @@ do while (run<=nrun)                                 !ensures the number of iter
 
 !-------------------------------Calculated keff----------------------------------------
 
-       kpath=(nubar*sigf/sigt*(coll+absorb)/n+kinf*absorb/n)/2.0d+0!nubar*sigf*2.0*sum(xpos)/n
+       kpath=(nubar*sigf/sigt*(coll+absorb)/n+kinf*absorb/n)/2.0d+0!nubar*sigf*distance/n
        kpathrat=(kpath/kpathold-1.0d+0)!*(kpath/kpathold)**run
        kpathold=kpath 
-       
+!print *, kpathrat 
+      
 !--------------------------Fission Bank Renormalization----------------------------------
 
          wtot=sum(fbanknew%number_n)
@@ -256,13 +260,13 @@ do while (run<=nrun)                                 !ensures the number of iter
          end do
 
          k=1 
-         do while(k<n)
-             if (fbank(k)%nposition==fbank(k+1)%nposition .and. fbank(k)%angle_n==fbank(k+1)%angle_n) then
-                fbank(k)%angle_n=2.0
-                fbanknew(k)%angle_n=2.0
-             end if
-             k=k+1
-         end do 
+!         do while(k<n)
+!             if (fbank(k)%nposition==fbank(k+1)%nposition .and. fbank(k)%angle_n==fbank(k+1)%angle_n) then
+!                fbank(k)%angle_n=2.0
+!                fbanknew(k)%angle_n=2.0
+!             end if
+!             k=k+1
+!         end do 
          
 !-----------------------------Shannon Entropy------------------------------------------
 
@@ -298,7 +302,7 @@ do while (run<=nrun)                                 !ensures the number of iter
     if (run>nrun_throw) then
       xposnew(1:bins)=(xpos(1:bins)/maxval(xpos)+xposnew(1:bins)*(run-nrun_throw))/(run+1.00-nrun_throw)
       keff=(keff*(run-nrun_throw)+kpath)/(run+1.00-nrun_throw)
-      nmax(run-nrun_throw)= kpath
+      nmax(run-nrun_throw)= keff
       
     else
       xposnew(1:bins)=xpos(1:bins)/maxval(xpos)
@@ -327,9 +331,9 @@ i=1
 flux(1:bins)=0
 posf=0
 do while(i<=bins)
-    flux(i)=(dsin(PI*(posf+2.1312*D)/(length+2*2.1312*D))+dsin(PI*(binwidth+posf+2.1312*D)/(length+2*2.1312*D)))/2.0
-    posf=posf+binwidth
-    i=i+1
+  flux(i)=(dsin(PI*(posf+2.1312*D)/(length+2.0*2.1312*D))+dsin(PI*(binwidth+posf+2.1312*D)/(length+2.0*2.1312*D)))/2.0
+  posf=posf+binwidth
+  i=i+1
 end do
 
 
